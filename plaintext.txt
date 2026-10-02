@@ -1,0 +1,15 @@
+inventory_project/
+│
+├── data/
+│   ├── users.json       (ระบบจะสร้างเองตอนรัน)
+│   ├── products.json    (ระบบจะสร้างเองตอนรัน)
+│   └── logs.json        (ระบบจะสร้างเองตอนรัน)
+│
+├── data_handler.py      # ไฟล์ที่ 1: จัดการไฟล์
+├── inventory_core.py    # ไฟล์ที่ 2: ฟังก์ชันหลัก (6 ฟังก์ชัน+)
+├── main.py              # ไฟล์ที่ 3: ระบบ CLI Menu สำหรับอาจารย์ตรวจ Loop/Condition
+│
+├── api/
+│   └── index.py         # ไฟล์ที่ 4: ไฟล์ Web API สำหรับขึ้น Vercel
+│
+└── vercel.json          # ไฟล์ที่ 5: ตั้งค่า Vercel
