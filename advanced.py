@@ -1,0 +1,107 @@
+"""Advanced inventory extension using Python standard library only."""
+import csv
+import io
+from datetime import datetime, timezone
+import data_handler as dh
+from services import ServiceError, _need
+import validators as V
+
+def _wh(db, wid):
+    wid=str(wid or "MAIN").upper()
+    row=db["warehouses"].get(wid)
+    if not row or not row.get("active", True):
+        raise ServiceError("Warehouse not found",404)
+    return row
+
+def bootstrap(db):
+    if not db["warehouses"]:
+        db["warehouses"]["MAIN"]={"id":"MAIN","name":"Main Warehouse","location":"Default","active":True,"created_at":dh.now_iso()}
+        return True
+    return False
+
+def list_warehouses(db,user,q):
+    rows=[x for x in db["warehouses"].values() if x.get("active",True)]
+    rows.sort(key=lambda x:x["name"].lower())
+    return {"items":rows,"total":len(rows)}
+
+def create_warehouse(db,user,payload):
+    errors=[]; wid=str(payload.get("id") or "").strip().upper()
+    name=V.to_str(payload.get("name"),"name",errors,2,80)
+    location=V.to_str(payload.get("location"),"location",errors,1,120)
+    if not wid or len(wid)>20 or not wid.replace("-","").isalnum(): errors.append("id is invalid")
+    _need(errors)
+    if wid in db["warehouses"]: raise ServiceError("Warehouse already exists",409)
+    row={"id":wid,"name":name,"location":location,"active":True,"created_at":dh.now_iso()}
+    db["warehouses"][wid]=row; dh.append_audit(db,user["username"],"CREATE","warehouse",wid,None,row)
+    if not dh.persist(db,"warehouses","audit_log","meta"): raise ServiceError("Could not save data",503)
+    return row
+
+def stock_by_warehouse(db,user,sku):
+    return {"sku":sku,"items":[{"warehouse":w["id"],"quantity":int(db["warehouse_stock"].get(w["id"],{}).get(sku,0))} for w in db["warehouses"].values() if w.get("active",True)]}
+
+def transfer(db,user,payload):
+    errors=[]; sku=V.to_sku(payload.get("sku"),errors)
+    src=str(payload.get("from_warehouse") or "MAIN").upper(); dst=str(payload.get("to_warehouse") or "MAIN").upper()
+    qty=V.to_int(payload.get("quantity"),"quantity",errors,1,1000000)
+    reason=V.to_str(payload.get("reason"),"reason",errors,3,200); _need(errors)
+    _wh(db,src); _wh(db,dst)
+    if src==dst: raise ServiceError("Warehouses must be different",409)
+    if sku not in db["products"]: raise ServiceError("Product not found",404)
+    srcq=int(db["warehouse_stock"].get(src,{}).get(sku,0))
+    if srcq<qty: raise ServiceError("Insufficient stock in source warehouse",409)
+    db["warehouse_stock"].setdefault(src,{})[sku]=srcq-qty
+    db["warehouse_stock"].setdefault(dst,{})[sku]=int(db["warehouse_stock"].get(dst,{}).get(sku,0))+qty
+    tid=dh.next_id(db,"TRF"); row={"id":tid,"sku":sku,"from_warehouse":src,"to_warehouse":dst,"quantity":qty,"reason":reason,"user":user["username"],"timestamp":dh.now_iso()}
+    db["transfers"][tid]=row; dh.append_audit(db,user["username"],"TRANSFER","warehouse",tid,None,row)
+    if not dh.persist(db,"warehouse_stock","transfers","audit_log","meta"): raise ServiceError("Could not save data",503)
+    return row
+
+def stock_count(db,user,payload):
+    errors=[]; wid=str(payload.get("warehouse") or "MAIN").upper(); _wh(db,wid)
+    items=payload.get("items")
+    if not isinstance(items,list) or not items: errors.append("items must be a non-empty list")
+    _need(errors); result=[]
+    for item in items:
+        sku=str(item.get("sku") or "").upper()
+        try: counted=int(item.get("counted"))
+        except (TypeError,ValueError): raise ServiceError("counted must be integer",422)
+        system=int(db["warehouse_stock"].get(wid,{}).get(sku,0)); diff=counted-system
+        db["warehouse_stock"].setdefault(wid,{})[sku]=counted
+        if sku in db["products"]: db["products"][sku]["quantity_on_hand"]+=diff
+        result.append({"sku":sku,"system":system,"counted":counted,"difference":diff})
+    cid=dh.next_id(db,"CNT"); row={"id":cid,"warehouse":wid,"items":result,"user":user["username"],"timestamp":dh.now_iso()}
+    db["stock_counts"][cid]=row; dh.append_audit(db,user["username"],"STOCK_COUNT","stock_count",cid,None,row)
+    if not dh.persist(db,"stock_counts","warehouse_stock","products","audit_log","meta"): raise ServiceError("Could not save data",503)
+    return row
+
+def forecast(db,user,sku,days=30):
+    try: days=max(1,min(int(days),365))
+    except (TypeError,ValueError): days=30
+    moves=[m for m in db["stock_movements"] if m["sku"]==sku and m["qty_change"]<0]
+    if not moves: return {"sku":sku,"daily_average":0,"forecast":0,"days":days}
+    dates=[datetime.fromisoformat(m["timestamp"][:10]).date() for m in moves]
+    span=max(1,(datetime.now(timezone.utc).date()-min(dates)).days+1)
+    daily=round(sum(-m["qty_change"] for m in moves)/span,2)
+    return {"sku":sku,"daily_average":daily,"forecast":round(daily*days,2),"days":days}
+
+def csv_products(db):
+    out=io.StringIO(); fields=["sku","name","category","unit","cost_price","selling_price","reorder_point","quantity_on_hand"]
+    w=csv.DictWriter(out,fieldnames=fields); w.writeheader()
+    for p in db["products"].values():
+        if p.get("active"): w.writerow({k:p.get(k,"") for k in fields})
+    return out.getvalue()
+
+def import_products_csv(db,user,text):
+    rows=list(csv.DictReader(io.StringIO(text)))
+    if len(rows)>5000: raise ServiceError("Maximum 5000 rows",422)
+    created=updated=0
+    for row in rows:
+        clean,errors=V.validate_product(row,creating=True); _need(errors)
+        sku=clean["sku"]
+        if sku in db["products"]:
+            p=db["products"][sku]; before=dict(p); p.update(clean); dh.append_audit(db,user["username"],"IMPORT_UPDATE","product",sku,before,p); updated+=1
+        else:
+            from services import _new_product
+            db["products"][sku]=_new_product(clean,user); dh.append_audit(db,user["username"],"IMPORT_CREATE","product",sku,None,db["products"][sku]); created+=1
+    if not dh.persist(db,"products","audit_log","meta"): raise ServiceError("Could not save data",503)
+    return {"created":created,"updated":updated,"rows":len(rows)}
