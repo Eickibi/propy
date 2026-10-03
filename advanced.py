@@ -121,6 +121,18 @@ def create_lot(db,user,payload):
     if not dh.persist(db,"lots","warehouse_stock","products","audit_log","meta"): raise ServiceError("Could not save data",503)
     return row
 
+def allocate_lots(db, sku, warehouse, quantity, method="FEFO"):
+    rows=[x for x in db["lots"].values() if x.get("active",True) and x["sku"]==sku and x["warehouse"]==warehouse and x["quantity"]>0]
+    method=str(method).upper()
+    rows.sort(key=(lambda x:(x["expiry"],x["created_at"])) if method=="FEFO" else (lambda x:(x["created_at"],x["expiry"])))
+    remaining=int(quantity); used=[]
+    for row in rows:
+        take=min(remaining,row["quantity"])
+        if take: row["quantity"]-=take; used.append({"lot_id":row["id"],"quantity":take,"unit_cost":row["unit_cost"]}); remaining-=take
+        if remaining==0: break
+    if remaining: raise ServiceError("Not enough lot stock",409)
+    return used
+
 def list_lots(db,user,q):
     rows=[x for x in db["lots"].values() if x.get("active",True)]
     if q.get("sku"): rows=[x for x in rows if x["sku"]==q["sku"].upper()]
