@@ -12,12 +12,14 @@ cli.py            เมนู CLI แบบ while-loop (รันในเค�
 รันในเครื่อง: `python index.py` (เว็บ) หรือ `python cli.py` (CLI)
 
 ## Deploy บน Vercel
-1. Import repo → Framework Preset = Other → Deploy (ห้ามมี vercel.json และไฟล์ชื่อ main.py/app.py/server.py)
-2. Environment Variables: `SECRET_KEY` (สตริงสุ่มยาว), `ADMIN_PASSWORD`, `SEED_DEMO=1` (ไม่บังคับ)
-3. Storage: เพิ่ม Upstash Redis แล้ว Connect กับโปรเจกต์ → Redeploy (ไม่งั้นข้อมูลหายตอน function เริ่มใหม่)
-4. ตรวจ `/api/health` ต้องได้ `"status": "ok"` และ `"storage": "kv"`
+1. Import repo แล้ว Deploy ได้เลย — โปรเจกต์มี `api/index.py` และ `vercel.json` สำหรับ routing แล้ว
+2. ตั้ง Environment Variables: `SECRET_KEY` เป็นค่าสุ่มยาว, `ADMIN_PASSWORD` เป็นรหัส admin ที่ต้องการ และ `SEED_DEMO=1` ถ้าต้องการข้อมูลตัวอย่าง
+3. ต่อ Upstash Redis ผ่าน Vercel Marketplace/Storage แล้ว Redeploy เพื่อให้ users/products/stock/log อยู่ถาวร โดย Vercel จะเติม `KV_REST_API_URL` และ `KV_REST_API_TOKEN` ให้เมื่อเชื่อม integration สำเร็จ.
+4. ตรวจ `/api/health` ต้องได้ `"status": "ok"` และ `"storage": "kv"`.
+5. Login admin ครั้งแรกด้วย username `admin` และค่า `ADMIN_PASSWORD` (ถ้าไม่ตั้งใช้ `Admin@123`).
 
-ล็อกอินครั้งแรก: `admin` / ค่าของ `ADMIN_PASSWORD` (ถ้าไม่ตั้งคือ `Admin@123`)
+หมายเหตุ: Vercel Python runtime รองรับ `handler` ที่สืบทอด `BaseHTTPRequestHandler`; โปรเจกต์นี้ใช้รูปแบบดังกล่าว และ pin Python 3.12 เพื่อให้ deployment คงที่. 
+
 
 
 ## Features added
