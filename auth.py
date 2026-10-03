@@ -7,6 +7,7 @@ import os
 import time
 
 SECRET = os.environ.get("SECRET_KEY", "")
+# A deployment must set SECRET_KEY; the fallback only keeps local development usable.
 TOKEN_TTL = 8 * 3600
 
 PERMISSIONS = {
