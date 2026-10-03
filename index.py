@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 import auth
 import data_handler as dh
 import services as svc
+import advanced as adv
 import ui
 
 MAX_BODY = 1_000_000
@@ -22,6 +23,7 @@ class Ctx:
 ROUTES = [
     ("GET", r"/health", "nodb", lambda c: svc.health()),
     ("POST", r"/login", "public", lambda c: svc.login(c.db, c.body.get("username"), c.body.get("password"))),
+    ("POST", r"/register", "public", lambda c: svc.register(c.db, c.body)),
     ("GET", r"/me", "auth", lambda c: svc.me(c.user)),
     ("POST", r"/password", "auth", lambda c: svc.change_password(c.db, c.user, c.body)),
     ("GET", r"/dashboard", "reports.view", lambda c: svc.dashboard(c.db, c.user)),
@@ -46,6 +48,14 @@ ROUTES = [
     ("GET", r"/users", "users.manage", lambda c: svc.list_users(c.db, c.user, c.query)),
     ("POST", r"/users", "users.manage", lambda c: svc.create_user(c.db, c.user, c.body)),
     ("PUT", r"/users/([^/]+)", "users.manage", lambda c: svc.update_user(c.db, c.user, c.args[0], c.body)),
+    ("GET", r"/warehouses", "products.view", lambda c: adv.list_warehouses(c.db,c.user,c.query)),
+    ("POST", r"/warehouses", "users.manage", lambda c: adv.create_warehouse(c.db,c.user,c.body)),
+    ("GET", r"/warehouse-stock/([^/]+)", "products.view", lambda c: adv.stock_by_warehouse(c.db,c.user,c.args[0])),
+    ("POST", r"/transfer", "stock.move", lambda c: adv.transfer(c.db,c.user,c.body)),
+    ("POST", r"/stock-count", "stock.move", lambda c: adv.stock_count(c.db,c.user,c.body)),
+    ("GET", r"/forecast/([^/]+)", "reports.view", lambda c: adv.forecast(c.db,c.user,c.args[0],c.query.get("days",30))),
+    ("GET", r"/lots", "stock.card", lambda c: adv.list_lots(c.db,c.user,c.query)),
+    ("POST", r"/lots", "stock.move", lambda c: adv.create_lot(c.db,c.user,c.body)),
 ]
 COMPILED = [(m, re.compile("^" + p + "$"), perm, fn) for m, p, perm, fn in ROUTES]
 
