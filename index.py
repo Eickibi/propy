@@ -54,6 +54,9 @@ ROUTES = [
     ("POST", r"/transfer", "stock.move", lambda c: adv.transfer(c.db,c.user,c.body)),
     ("POST", r"/stock-count", "stock.move", lambda c: adv.stock_count(c.db,c.user,c.body)),
     ("GET", r"/forecast/([^/]+)", "reports.view", lambda c: adv.forecast(c.db,c.user,c.args[0],c.query.get("days",30))),
+    ("GET", r"/export/products.csv", "products.view", lambda c: {"filename":"products.csv","content":adv.csv_products(c.db)}),
+    ("POST", r"/import/products.csv", "products.write", lambda c: adv.import_products_csv(c.db,c.user,c.body.get("csv",""))),
+
     ("GET", r"/lots", "stock.card", lambda c: adv.list_lots(c.db,c.user,c.query)),
     ("POST", r"/lots", "stock.move", lambda c: adv.create_lot(c.db,c.user,c.body)),
 ]
