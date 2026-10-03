@@ -388,11 +388,26 @@ def stock_move(db, user, payload) -> dict:
     unit_cost = None
     if mtype == "INBOUND" and payload.get("unit_cost") not in (None, ""):
         unit_cost = V.to_float(payload.get("unit_cost"), "unit_cost", errors)
+    warehouse = str(payload.get("warehouse") or "MAIN").strip().upper()
+    cost_method = str(payload.get("cost_method") or "WEIGHTED_AVERAGE").upper()
+    if cost_method not in ("WEIGHTED_AVERAGE", "FIFO", "FEFO"):
+        errors.append("cost_method must be WEIGHTED_AVERAGE, FIFO or FEFO")
     _need(errors)
     product = _get_product(db, sku)
     delta = -qty if mtype == "OUTBOUND" else qty
+    # Keep warehouse quantities in sync. Lot-aware outbound uses FIFO/FEFO when lots exist.
+    db.setdefault("warehouse_stock", {}).setdefault(warehouse, {})
+    current_wh = int(db["warehouse_stock"][warehouse].get(sku, 0))
+    if mtype == "OUTBOUND" and current_wh < qty:
+        raise ServiceError(f"Insufficient stock in {warehouse}: on hand {current_wh}, requested {qty}", 409)
     movement = apply_movement(db, user["username"], product, mtype, delta, reason, reference, unit_cost)
-    _save(db, "products", "stock_movements")
+    db["warehouse_stock"][warehouse][sku] = current_wh + delta
+    if mtype == "OUTBOUND" and cost_method in ("FIFO", "FEFO") and db.get("lots"):
+        used = adv.allocate_lots(db, sku, warehouse, qty, cost_method)
+        movement["lot_allocations"] = used
+        if used:
+            movement["unit_cost"] = round(sum(x["quantity"] * x["unit_cost"] for x in used) / qty, 2)
+    _save(db, "products", "stock_movements", "warehouse_stock", "lots")
     return movement
 
 
