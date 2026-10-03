@@ -140,3 +140,37 @@ def list_lots(db,user,q):
     method=q.get("method","FEFO").upper()
     rows.sort(key=(lambda x:(x["expiry"],x["created_at"])) if method=="FEFO" else (lambda x:(x["created_at"],x["expiry"])))
     return {"items":rows,"total":len(rows),"method":method}
+
+def excel_products(db):
+    """Export products as Excel-compatible SpreadsheetML without third-party packages."""
+    from xml.sax.saxutils import escape, quoteattr
+    fields=["sku","name","category","unit","cost_price","selling_price","reorder_point","quantity_on_hand"]
+    rows=['<?xml version="1.0"?>','<?mso-application progid="Excel.Sheet"?>',
+          '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">',
+          '<Worksheet ss:Name="Products"><Table>']
+    rows.append('<Row>'+''.join('<Cell><Data ss:Type="String">'+escape(x)+'</Data></Cell>' for x in fields)+'</Row>')
+    for p in db["products"].values():
+        if not p.get("active"): continue
+        cells=[]
+        for k in fields:
+            v=p.get(k,"")
+            typ="Number" if isinstance(v,(int,float)) and not isinstance(v,bool) else "String"
+            cells.append('<Cell><Data ss:Type="%s">%s</Data></Cell>'%(typ,escape(str(v))))
+        rows.append('<Row>'+''.join(cells)+'</Row>')
+    rows += ['</Table></Worksheet></Workbook>']
+    return ''.join(rows)
+
+
+def import_products_excel(db,user,text):
+    """Accept simple Excel SpreadsheetML or HTML-table exports using stdlib only."""
+    import re
+    if "<Workbook" in text or "<ss:Workbook" in text:
+        cells=re.findall(r'<Data[^>]*>(.*?)</Data>',text,re.S|re.I)
+        clean=[re.sub(r'<[^>]+>','',x).replace('&amp;','&').replace('&lt;','<').replace('&gt;','>') for x in cells]
+        width=8
+        rows=[clean[i:i+width] for i in range(0,len(clean),width)]
+        if rows and rows[0] and rows[0][0].lower()=="sku": rows=rows[1:]
+        csv_text=io.StringIO(); w=csv.writer(csv_text); w.writerows(rows)
+        header="sku,name,category,unit,cost_price,selling_price,reorder_point,quantity_on_hand\n"
+        return import_products_csv(db,user,header+csv_text.getvalue())
+    raise ServiceError("Unsupported Excel format. Export using this system's Excel button or upload CSV.",422)
