@@ -19,13 +19,13 @@ table{border-collapse:collapse;width:100%}th,td{padding:7px 10px;text-align:left
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0}
 .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px}.card small{color:var(--mut);display:block}.card b{font-size:22px}
 .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}.pg{display:flex;gap:10px;align-items:center;justify-content:flex-end}
-.low{color:var(--bad);font-weight:600}#login{max-width:320px;margin:15vh auto;display:grid;gap:10px;padding:20px;background:var(--card);border:1px solid var(--line);border-radius:10px}
+.low{color:var(--bad);font-weight:600}#login,#register{max-width:360px;margin:15vh auto;display:grid;gap:10px;padding:20px;background:var(--card);border:1px solid var(--line);border-radius:10px}
 dialog{border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--fg);min-width:min(92vw,380px)}dialog label{display:grid;gap:3px;margin:8px 0}
 dialog menu{display:flex;gap:8px;justify-content:flex-end;padding:0}#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);padding:10px 16px;border-radius:8px;background:var(--fg);color:var(--bg);display:none;max-width:90vw}
 </style>
 </head>
 <body>
-<form id="login"><h2>Inventory Login</h2><input id="lu" placeholder="Username" autocomplete="username" required><input id="lp" type="password" placeholder="Password" autocomplete="current-password" required><button class="pri">Sign in</button></form>
+<form id="login"><h2>Inventory Login</h2><input id="lu" placeholder="Username" autocomplete="username" required><input id="lp" type="password" placeholder="Password" autocomplete="current-password" required><button class="pri">Sign in</button><button type="button" id="showreg">Create account</button></form><form id="register" hidden><h2>Create account</h2><input id="ru" placeholder="Username (3-30)" required pattern="[a-z0-9_.]{3,30}"><input id="rn" placeholder="Full name" required><input id="rp" type="password" placeholder="Password (8+, letters + digits)" required><input id="rc" type="password" placeholder="Confirm password" required><button class="pri">Register</button><button type="button" id="backlogin">Back to login</button></form>
 <div id="app" hidden>
 <header><b>📦 Inventory</b><span><span id="who"></span> <button id="pw">Password</button> <button id="out">Log out</button></span></header>
 <nav id="nav"></nav><main id="view"></main></div>
@@ -116,10 +116,10 @@ document.addEventListener('click',e=>{const a=e.target.closest('[data-a]');if(a&
   const n=e.target.closest('#nav button');if(n)nav(n.dataset.n)});
 
 function logout(){S.token='';S.me=null;sessionStorage.removeItem('t');$('#app').hidden=true;$('#login').hidden=false}
-async function enter(){S.me=await api('/me');$('#login').hidden=true;$('#app').hidden=false;$('#who').textContent=`${S.me.user.username} (${S.me.user.role})`;
+async function enter(){S.me=await api('/me');$('#register').hidden=true;$('#login').hidden=true;$('#app').hidden=false;$('#who').textContent=`${S.me.user.username} (${S.me.user.role})`;
   const items=NAV.filter(n=>can(n[2]));$('#nav').innerHTML=items.map(n=>`<button data-n="${n[0]}">${n[1]}</button>`).join('');nav(items[0][0])}
 $('#login').onsubmit=guard(async e=>{e.preventDefault();const r=await api('/login','POST',{username:val('lu'),password:val('lp')});S.token=r.token;sessionStorage.setItem('t',r.token);$('#lp').value='';await enter()});
-$('#out').onclick=logout;
+$('#out').onclick=logout;\n$('#showreg').onclick=()=>{$('#login').hidden=true;$('#register').hidden=false};\n$('#backlogin').onclick=()=>{$('#register').hidden=true;$('#login').hidden=false};\n$('#register').onsubmit=guard(async e=>{e.preventDefault();if(val('rp')!==val('rc'))throw new Error('Passwords do not match');const r=await api('/register','POST',{username:val('ru'),full_name:val('rn'),password:val('rp')});S.token=r.token;sessionStorage.setItem('t',S.token);await enter()});
 $('#pw').onclick=guard(async()=>{const v=await ask('Change password',[{n:'old_password',l:'Current password',t:'password'},{n:'new_password',l:'New password',t:'password'}]);if(v){await api('/password','POST',v);toast('Password changed')}});
 if(S.token)guard(enter)().then(()=>{if(!S.me)logout()});
 </script>
