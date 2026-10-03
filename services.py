@@ -214,6 +214,25 @@ def update_user(db, user, username, payload) -> dict:
     return public_user(target)
 
 
+# ------------------------------------------------------------------ self registration
+def register(db, payload) -> dict:
+    errors = []
+    username = str(payload.get("username") or "").strip().lower()
+    if not V.USERNAME_RE.match(username):
+        errors.append("username must be 3-30 lowercase letters, numbers, '_' or '.'")
+    full_name = V.to_str(payload.get("full_name"), "full_name", errors, 2, 60)
+    password = V.validate_password(payload.get("password"), errors)
+    if username in db["users"]:
+        errors.append("username already exists")
+    _need(errors)
+    user = {"username": username, "password_hash": dh.hash_password(password),
+            "role": "customer", "full_name": full_name, "active": True,
+            "created_at": dh.now_iso()}
+    db["users"][username] = user
+    _audit(db, user, "REGISTER", "user", username, None, public_user(user))
+    _save(db, "users")
+    return {"token": auth.make_token(username, "customer"), "user": public_user(user)}
+
 # ------------------------------------------------------------------ products
 def _new_product(clean: dict, user: dict) -> dict:
     now = dh.now_iso()
