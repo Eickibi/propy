@@ -1,7 +1,9 @@
 """main.py - interactive CLI (local use). Same business logic as the Vercel API."""
 import getpass
 
-from lib import data_handler as dh, services as svc
+import auth
+import data_handler as dh
+import services as svc
 
 
 class InputCancelled(Exception):
@@ -134,7 +136,6 @@ MENU = [("1", "List / search products", show_products, "products.view"),
 
 
 def run_menu(db, user):
-    from lib import auth
     allowed = {k: (label, fn) for k, label, fn, perm in MENU if auth.can(user["role"], perm)}
     running = True
     while running:
