@@ -91,6 +91,10 @@ def _run(perm, fn, match, query, auth_header, raw_body):
             return 200, fn(Ctx(None, None, match.groups(), query, body))
         db, _warnings = dh.load_all()
         svc.bootstrap(db)
+        # Initialize the default warehouse independently of user bootstrap.
+        if adv.bootstrap(db):
+            if not dh.persist(db, "warehouses", "meta"):
+                raise svc.ServiceError("Could not initialize warehouse storage", 503)
         user = None
         if perm != "public":
             user = _authenticate(db, auth_header)
