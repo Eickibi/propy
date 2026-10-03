@@ -98,9 +98,11 @@ def health() -> dict:
 
 
 def bootstrap(db: dict) -> bool:
-    """First-run setup: default admin (+ optional demo data). Returns True if data was created."""
+    """Ensure a usable admin account exists, then optionally seed demo data."""
     changed = False
-    if not db["users"]:
+    # Do not depend on the users collection being empty: an old Vercel/KV dataset
+    # may already contain customer/staff users while missing the admin account.
+    if "admin" not in db["users"]:
         password = os.environ.get("ADMIN_PASSWORD") or "Admin@123"
         db["users"]["admin"] = {
             "username": "admin", "password_hash": dh.hash_password(password), "role": "admin",
