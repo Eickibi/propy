@@ -18,3 +18,16 @@ cli.py            เมนู CLI แบบ while-loop (รันในเค�
 4. ตรวจ `/api/health` ต้องได้ `"status": "ok"` และ `"storage": "kv"`
 
 ล็อกอินครั้งแรก: `admin` / ค่าของ `ADMIN_PASSWORD` (ถ้าไม่ตั้งคือ `Admin@123`)
+
+
+## Features added
+- Separate Login / Register screens. Public self-registration creates **customer** accounts; only admin can create staff/admin.
+- RBAC: admin, staff, customer.
+- Multi-warehouse API: warehouse creation, warehouse stock and transfers.
+- Lot/expiry tracking API with FEFO/FIFO ordering.
+- Stock count with system-vs-counted difference.
+- Demand forecast from historical outbound movements.
+- CSV product import/export helpers.
+- Existing weighted-average cost calculation remains in stock receiving.
+- Audit log records important changes.
+- Validation, pagination, sorting, filtering and friendly error handling remain enabled.
