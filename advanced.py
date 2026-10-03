@@ -105,3 +105,26 @@ def import_products_csv(db,user,text):
             db["products"][sku]=_new_product(clean,user); dh.append_audit(db,user["username"],"IMPORT_CREATE","product",sku,None,db["products"][sku]); created+=1
     if not dh.persist(db,"products","audit_log","meta"): raise ServiceError("Could not save data",503)
     return {"created":created,"updated":updated,"rows":len(rows)}
+
+def create_lot(db,user,payload):
+    errors=[]; sku=V.to_sku(payload.get("sku"),errors); wid=str(payload.get("warehouse") or "MAIN").upper()
+    lot=V.to_str(payload.get("lot"),"lot",errors,1,50); qty=V.to_int(payload.get("quantity"),"quantity",errors,1,1000000)
+    cost=V.to_float(payload.get("unit_cost"),"unit_cost",errors); expiry=V.to_str(payload.get("expiry"),"expiry",errors,10,10); _need(errors)
+    _wh(db,wid)
+    try: datetime.strptime(expiry,"%Y-%m-%d")
+    except ValueError: raise ServiceError("expiry must be YYYY-MM-DD",422)
+    if sku not in db["products"]: raise ServiceError("Product not found",404)
+    lid=dh.next_id(db,"LOT"); row={"id":lid,"sku":sku,"warehouse":wid,"lot":lot,"quantity":qty,"unit_cost":cost,"expiry":expiry,"active":True,"created_at":dh.now_iso()}
+    db["lots"][lid]=row; db["warehouse_stock"].setdefault(wid,{})[sku]=int(db["warehouse_stock"].get(wid,{}).get(sku,0))+qty
+    db["products"][sku]["quantity_on_hand"]+=qty
+    dh.append_audit(db,user["username"],"CREATE","lot",lid,None,row)
+    if not dh.persist(db,"lots","warehouse_stock","products","audit_log","meta"): raise ServiceError("Could not save data",503)
+    return row
+
+def list_lots(db,user,q):
+    rows=[x for x in db["lots"].values() if x.get("active",True)]
+    if q.get("sku"): rows=[x for x in rows if x["sku"]==q["sku"].upper()]
+    if q.get("warehouse"): rows=[x for x in rows if x["warehouse"]==q["warehouse"].upper()]
+    method=q.get("method","FEFO").upper()
+    rows.sort(key=(lambda x:(x["expiry"],x["created_at"])) if method=="FEFO" else (lambda x:(x["created_at"],x["expiry"])))
+    return {"items":rows,"total":len(rows),"method":method}
