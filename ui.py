@@ -25,13 +25,15 @@ dialog menu{display:flex;gap:8px;justify-content:flex-end;padding:0}#toast{posit
 </style>
 </head>
 <body>
-<form id="login"><h2>Inventory Login</h2><input id="lu" placeholder="Username" autocomplete="username" required><input id="lp" type="password" placeholder="Password" autocomplete="current-password" required><button class="pri">Sign in</button><button type="button" id="showreg">Create account</button></form><form id="register" hidden><h2>Create account</h2><input id="ru" placeholder="Username (3-30)" required pattern="[a-z0-9_.]{3,30}"><input id="rn" placeholder="Full name" required><input id="rp" type="password" placeholder="Password (8+, letters + digits)" required><input id="rc" type="password" placeholder="Confirm password" required><button class="pri">Register</button><button type="button" id="backlogin">Back to login</button></form>
+<form id="login"><h2>Inventory Login</h2><p class="mut">Sign in to continue</p><input id="lu" placeholder="Username" autocomplete="username" required><input id="lp" type="password" placeholder="Password" autocomplete="current-password" required><button class="pri">Sign in</button><button type="button" id="showreg">Create account</button></form><form id="register" hidden><h2>Create account</h2><p class="mut">New users register as Customer</p><input id="ru" placeholder="Username (3-30)" required pattern="[a-z0-9_.]{3,30}"><input id="rn" placeholder="Full name" required><input id="rp" type="password" placeholder="Password (8+, letters + digits)" required><input id="rc" type="password" placeholder="Confirm password" required><button class="pri">Register</button><button type="button" id="backlogin">Back to login</button></form>
 <div id="app" hidden>
 <header><b>📦 Inventory</b><span><span id="who"></span> <button id="pw">Password</button> <button id="out">Log out</button></span></header>
 <nav id="nav"></nav><main id="view"></main></div>
 <dialog id="dlg"></dialog><div id="toast"></div>
 <script>
 const S={token:sessionStorage.getItem('t')||'',me:null,page:'',Q:{}};
+function showAuth(page){$('#app').hidden=true;$('#login').hidden=page!=='login';$('#register').hidden=page!=='register';}
+window.addEventListener('hashchange',()=>{if(!S.me)showAuth(location.hash==='#register'?'register':'login')});
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -72,7 +74,7 @@ async products(){const q=S.Q,staff=can('products.view_cost'),r=await api('/produ
   const sorts=staff?['sku','name','category','quantity_on_hand','selling_price','cost_price']:['sku','name','category','selling_price'];
   return bar(`<input id=f1 placeholder="Search SKU / name" value="${esc(q.search||'')}"><select id=f2><option value="">All categories</option>${r.categories.map(c=>`<option ${q.category===c?'selected':''}>${esc(c)}</option>`).join('')}</select><select id=f3>${sorts.map(s=>`<option ${q.sort===s?'selected':''}>${s}</option>`).join('')}</select><select id=f4><option>asc</option><option ${q.order==='desc'?'selected':''}>desc</option></select>${staff?`<label><input type=checkbox id=f5 ${q.low_only?'checked':''}> low only</label>`:''}<button class=pri id=go>Filter</button>`,can('products.write')?'<button class=pri data-a=newP>+ New product</button>':'')+table(cols,r.items)+pager(r)},
 async stock(){const r=await api('/low-stock');
-  return bar('<button class=pri data-a=move>Record stock movement</button>')+'<h3>Reorder alerts</h3>'+table([['SKU',x=>esc(x.sku)],['Name',x=>esc(x.name)],['On hand',x=>`<span class=low>${x.quantity_on_hand}</span>`],['Reorder point',x=>x.reorder_point],['Shortfall',x=>x.shortfall]],r.items)},
+  return bar('<button class=pri data-a=move>Record stock movement</button><button data-a=scan>📷 Scan barcode / QR</button><button data-a=transfer>Transfer stock</button>')+'<h3>Reorder alerts</h3>'+table([['SKU',x=>esc(x.sku)],['Name',x=>esc(x.name)],['On hand',x=>`<span class=low>${x.quantity_on_hand}</span>`],['Reorder point',x=>x.reorder_point],['Shortfall',x=>x.shortfall]],r.items)},
 async suppliers(){const q=S.Q,r=await api('/suppliers?'+qs(q));
   return bar(`<input id=f1 placeholder="Search" value="${esc(q.search||'')}"><button class=pri id=go>Search</button>`,can('suppliers.write')?'<button class=pri data-a=newS>+ New supplier</button>':'')+table([['ID',x=>esc(x.id)],['Name',x=>esc(x.name)],['Contact',x=>esc(x.contact)],['Phone',x=>esc(x.phone)],['Email',x=>esc(x.email)],['',x=>(can('suppliers.write')?btn('editS',x.id,'Edit'):'')+(can('suppliers.delete')?btn('delS',x.id,'Del','bad'):'')]],r.items)+pager(r)},
 async pos(){const q=S.Q,r=await api('/purchase-orders?'+qs(q));
@@ -103,7 +105,7 @@ const acts={
  delP:k=>confirm('Delete '+k+'?')&&crud('/products/'+k,'DELETE',null,'Product deleted'),
  card:async k=>{const r=await api(`/products/${k}/card?page=${S.Q.cardPage||1}`);$('#view').innerHTML=bar(`<button data-a=back>← Back</button><b>${esc(r.product.sku)} · ${esc(r.product.name)}</b> · on hand ${r.product.quantity_on_hand}`)+table(mvCols,r.items)+`<small>Page ${r.page}/${r.pages} (${r.total} movements)</small>`},
  back:()=>show(),
- move:async()=>{const v=await ask('Stock movement',[{n:'sku',l:'SKU'},{n:'type',l:'Type',t:'select',o:['INBOUND','OUTBOUND','ADJUSTMENT']},{n:'quantity',l:'Quantity (adjustment may be negative)',t:'number'},{n:'reason',l:'Reason (required)'},{n:'reference',l:'Reference (optional)'},{n:'unit_cost',l:'Unit cost (inbound, optional)',t:'number'}]);if(v)crud('/stock','POST',v,'Movement recorded')},
+ move:async()=>{const v=await ask('Stock movement',[{n:'sku',l:'SKU'},{n:'warehouse',l:'Warehouse ID',p:'MAIN'},{n:'cost_method',l:'Cost method',t:'select',o:['WEIGHTED_AVERAGE','FIFO','FEFO']},{n:'type',l:'Type',t:'select',o:['INBOUND','OUTBOUND','ADJUSTMENT']},{n:'quantity',l:'Quantity (adjustment may be negative)',t:'number'},{n:'reason',l:'Reason (required)'},{n:'reference',l:'Reference (optional)'},{n:'unit_cost',l:'Unit cost (inbound, optional)',t:'number'}]);if(v)crud('/stock','POST',v,'Movement recorded')},
  newS:async()=>{const v=await ask('New supplier',SF);if(v)crud('/suppliers','POST',v,'Supplier created')},
  editS:async k=>{const d=await api('/suppliers?search='+encodeURIComponent(k));const s=d.items.find(x=>x.id===k)||{};const v=await ask('Edit supplier',SF,s);if(v)crud('/suppliers/'+k,'PUT',v,'Supplier updated')},
  delS:k=>confirm('Delete supplier '+k+'?')&&crud('/suppliers/'+k,'DELETE',null,'Supplier deleted'),
@@ -113,6 +115,8 @@ const acts={
  po_receive:k=>confirm('Receive all lines into stock?')&&crud(`/purchase-orders/${k}/receive`,'POST',null,'PO received - stock updated'),
  po_cancel:k=>confirm('Cancel '+k+'?')&&crud(`/purchase-orders/${k}/cancel`,'POST',null,'PO cancelled'),
  newW:async()=>{const v=await ask('New warehouse',[{n:'id',l:'ID'},{n:'name',l:'Name'},{n:'location',l:'Location'}]);if(v)crud('/warehouses','POST',v,'Warehouse created')},
+scan:async()=>{if(!('BarcodeDetector' in window)){toast('Barcode/QR scanning is not supported by this browser.');return}try{const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});const video=document.createElement('video');video.srcObject=stream;video.setAttribute('playsinline','');await video.play();document.body.appendChild(video);video.style='position:fixed;inset:10%;width:80%;height:60%;object-fit:contain;background:#000;z-index:9999';const detector=new BarcodeDetector({formats:['qr_code','code_128','code_39','ean_13','ean_8','upc_a','upc_e']});let found=null;const started=Date.now();while(!found&&Date.now()-started<15000){const codes=await detector.detect(video);if(codes.length)found=codes[0].rawValue;await new Promise(r=>setTimeout(r,150))}stream.getTracks().forEach(t=>t.stop());video.remove();if(found){const v=await ask('Stock movement',[{n:'sku',l:'SKU'}],{sku:found});if(v)crud('/stock','POST',{...v,type:'OUTBOUND',quantity:1,reason:'Barcode scan'},'Stock movement recorded')}else toast('No barcode found') }catch(e){toast('Camera unavailable or permission denied')}},
+transfer:async()=>{const v=await ask('Transfer stock',[{n:'sku',l:'SKU'},{n:'from_warehouse',l:'From warehouse'},{n:'to_warehouse',l:'To warehouse'},{n:'quantity',l:'Quantity',t:'number'},{n:'reason',l:'Reason'}]);if(v)crud('/transfer','POST',v,'Stock transferred')},
 newL:async()=>{const v=await ask('Add lot',[{n:'sku',l:'SKU'},{n:'warehouse',l:'Warehouse ID'},{n:'lot',l:'Lot number'},{n:'quantity',l:'Quantity',t:'number'},{n:'unit_cost',l:'Unit cost',t:'number'},{n:'expiry',l:'Expiry YYYY-MM-DD'}]);if(v)crud('/lots','POST',v,'Lot created')},
 count:async()=>{const v=await ask('Stock count',[{n:'warehouse',l:'Warehouse ID'},{n:'items',l:'Items: SKU,counted per line',t:'textarea',p:'SKU001,10'}]);if(v){const items=v.items.split('\n').filter(Boolean).map(x=>{const [sku,counted]=x.split(',').map(s=>s.trim());return{sku,counted}});crud('/stock-count','POST',{warehouse:v.warehouse,items},'Stock count saved')}},
 newU:async()=>{const v=await ask('New user',[{n:'username',l:'Username'},{n:'full_name',l:'Full name'},{n:'role',l:'Role',t:'select',o:['staff','customer','admin']},{n:'password',l:'Password (8+, letters+digits)',t:'password'}]);if(v)crud('/users','POST',v,'User created')},
@@ -122,13 +126,16 @@ document.addEventListener('click',e=>{const a=e.target.closest('[data-a]');if(a&
   const p=e.target.closest('[data-p]');if(p&&!p.disabled){S.Q.page=p.dataset.p;show()}
   const n=e.target.closest('#nav button');if(n)nav(n.dataset.n)});
 
-function logout(){S.token='';S.me=null;sessionStorage.removeItem('t');$('#app').hidden=true;$('#login').hidden=false}
+function logout(){S.token='';S.me=null;sessionStorage.removeItem('t');location.hash='login';showAuth('login')}
 async function enter(){S.me=await api('/me');$('#register').hidden=true;$('#login').hidden=true;$('#app').hidden=false;$('#who').textContent=`${S.me.user.username} (${S.me.user.role})`;
   const items=NAV.filter(n=>can(n[2]));$('#nav').innerHTML=items.map(n=>`<button data-n="${n[0]}">${n[1]}</button>`).join('');nav(items[0][0])}
 $('#login').onsubmit=guard(async e=>{e.preventDefault();const r=await api('/login','POST',{username:val('lu'),password:val('lp')});S.token=r.token;sessionStorage.setItem('t',r.token);$('#lp').value='';await enter()});
-$('#out').onclick=logout;\n$('#showreg').onclick=()=>{$('#login').hidden=true;$('#register').hidden=false};\n$('#backlogin').onclick=()=>{$('#register').hidden=true;$('#login').hidden=false};\n$('#register').onsubmit=guard(async e=>{e.preventDefault();if(val('rp')!==val('rc'))throw new Error('Passwords do not match');const r=await api('/register','POST',{username:val('ru'),full_name:val('rn'),password:val('rp')});S.token=r.token;sessionStorage.setItem('t',S.token);await enter()});
+$('#out').onclick=logout;
+$('#showreg').onclick=()=>{location.hash='register';showAuth('register')};
+$('#backlogin').onclick=()=>{location.hash='login';showAuth('login')};
+$('#register').onsubmit=guard(async e=>{e.preventDefault();if(val('rp')!==val('rc'))throw new Error('Passwords do not match');const r=await api('/register','POST',{username:val('ru'),full_name:val('rn'),password:val('rp')});S.token=r.token;sessionStorage.setItem('t',S.token);await enter()});
 $('#pw').onclick=guard(async()=>{const v=await ask('Change password',[{n:'old_password',l:'Current password',t:'password'},{n:'new_password',l:'New password',t:'password'}]);if(v){await api('/password','POST',v);toast('Password changed')}});
-if(S.token)guard(enter)().then(()=>{if(!S.me)logout()});
+if(S.token)guard(enter)().then(()=>{if(!S.me)logout()});else showAuth(location.hash==='#register'?'register':'login');
 </script>
 </body>
 </html>
