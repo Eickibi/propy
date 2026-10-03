@@ -403,7 +403,8 @@ def stock_move(db, user, payload) -> dict:
     movement = apply_movement(db, user["username"], product, mtype, delta, reason, reference, unit_cost)
     db["warehouse_stock"][warehouse][sku] = current_wh + delta
     if mtype == "OUTBOUND" and cost_method in ("FIFO", "FEFO") and db.get("lots"):
-        used = adv.allocate_lots(db, sku, warehouse, qty, cost_method)
+        from advanced import allocate_lots
+        used = allocate_lots(db, sku, warehouse, qty, cost_method)
         movement["lot_allocations"] = used
         if used:
             movement["unit_cost"] = round(sum(x["quantity"] * x["unit_cost"] for x in used) / qty, 2)
