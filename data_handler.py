@@ -28,6 +28,9 @@ COLLECTIONS = {
     "users": dict, "products": dict, "suppliers": dict, "purchase_orders": dict,
     "stock_movements": list, "audit_log": list,
     "meta": lambda: {"counters": {}},
+    # Advanced inventory collections: warehouses, transfers, lots and stock counts.
+    "warehouses": dict, "warehouse_stock": dict, "transfers": dict,
+    "stock_counts": dict, "lots": dict,
 }
 
 
